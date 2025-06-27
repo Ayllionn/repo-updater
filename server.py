@@ -100,31 +100,40 @@ def restart_script():
         os.execl(python, python, script)
 
 def main():
+    global latest_commit_sha
     config = load_config()
     if not config:
         config['github_token'] = get_user_input("Entrez votre token GitHub : ")
         config['repo_url'] = get_user_input("Entrez l'URL de votre dépôt GitHub (ex: https://github.com/propriétaire/nom_du_dépôt) : ")
         config['local_repo_path'] = get_user_input("Entrez le chemin local de votre dépôt : ")
         config['commands_to_run'] = get_user_input("Entrez les commandes à exécuter, séparées par des virgules : ").split(',')
+        branches = get_branches(config['repo_url'], config['github_token'])
+        print("Branches disponibles :")
+        for i, branch in enumerate(branches):
+            print(f"{i + 1}. {branch}")
+        branch_index = int(get_user_input("Entrez le numéro de la branche à cloner : ")) - 1
+        config['branch'] = branches[branch_index]
         save_config(config)
     else:
         print("Configuration chargée depuis le fichier.")
+        branches = get_branches(config['repo_url'], config['github_token'])
+        if 'branch' not in config:
+            print("Branches disponibles :")
+            for i, branch in enumerate(branches):
+                print(f"{i + 1}. {branch}")
+            branch_index = int(get_user_input("Entrez le numéro de la branche à cloner : ")) - 1
+            config['branch'] = branches[branch_index]
+            save_config(config)
+        else:
+            print(f"Branche sélectionnée : {config['branch']}")
 
-    branches = get_branches(config['repo_url'], config['github_token'])
-    print("Branches disponibles :")
-    for i, branch in enumerate(branches):
-        print(f"{i + 1}. {branch}")
-
-    branch_index = int(get_user_input("Entrez le numéro de la branche à cloner : ")) - 1
-    branch = branches[branch_index]
-
-    clone_or_pull_repo(config['repo_url'], config['local_repo_path'], config['github_token'], branch)
+    clone_or_pull_repo(config['repo_url'], config['local_repo_path'], config['github_token'], config['branch'])
 
     stop_event = threading.Event()
 
     # Démarrer les threads pour exécuter les commandes et vérifier les mises à jour
     commands_thread = threading.Thread(target=run_commands, args=(config['commands_to_run'], config['local_repo_path'], stop_event))
-    update_thread = threading.Thread(target=check_for_updates, args=(config['repo_url'], config['local_repo_path'], config['github_token'], stop_event, branch))
+    update_thread = threading.Thread(target=check_for_updates, args=(config['repo_url'], config['local_repo_path'], config['github_token'], stop_event, config['branch']))
 
     commands_thread.start()
     update_thread.start()
